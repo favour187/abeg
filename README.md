@@ -1,57 +1,44 @@
-# Abeg
+# Dayline
 
-Speak am. We write am. Code check am.
+**One conversation. Everything organised.**
 
-Talk to your phone the way you actually talk — Naija English, pidgin, Yorùbá, Igbo, Hausa, or any of ten languages — and Abeg turns the breath into tasks with owners, deadlines, money and done-markers. Then code re-checks every single task against your exact words before it is allowed to wear a verified badge.
+Dayline is a multilingual productivity workspace. Users can type or speak naturally, and the app organises the conversation into:
 
-## The rule the app lives by
+- **Tasks** — action items, owners, due dates and progress.
+- **Email drafts** — suggested subject lines and message bodies for review; Dayline does not send them.
+- **Calendar events** — suggested events with an `.ics` export.
+- **Business desk** — lightweight job, expense and invoice records.
 
-A claim without its quote is not a task. Every line Abeg shows you carries the exact substring of your speech that proves it. If the AI returns a task whose quote does not appear word-for-word in your transcript, it is flagged **unverified** and shown dimmed. If the pidgin grammar engine finds the same task independently, it wears an **AI + grammar agree** badge.
+## What makes it different
 
-## Three layers, in order of trust
+Dayline uses the conversation as the starting point. Users do not choose a language first: the AI detects the language from the text and is instructed to keep generated content in that language. Each generated item includes an exact source quote. The app checks whether that quote exists in the original text and flags unmatched evidence.
 
-1. **Your browser's ear.** Speech-to-text happens on device via the Web Speech API. No audio ever leaves your phone through Abeg.
-2. **Free keyless AI.** The transcript goes to a free OpenAI-compatible endpoint (or your own Grok / OpenAI key under ⚙ AI) to understand any language.
-3. **Deterministic pidgin grammar engine.** Runs always, offline, with zero keys. It understands `make I...`, `tell Ada to...`, `X go buy...`, `X don pay` (done), `no forget to...`, `make we...`, vocative `o`, naira amounts, and day/time deadlines. Its self-test score (22 pidgin sentences) is displayed in the app at all times.
+A matching quote is evidence that the words appeared in the conversation; it is **not** proof that the AI interpreted them correctly. Users must review suggestions before acting on them.
 
-If layer 2 dies, layer 3 carries the app alone and tells you so.
+## AI
 
-## Provability
+The server endpoint uses Google's Gemini API with structured JSON output. The default model is `gemini-3.5-flash-lite`. Model availability and free-tier limits can change.
 
-- Grammar self-test badge: sentences in, expected owners/deadlines/done-markers out, score on screen.
-- Per-task quote disclosure: "the exact words".
-- Date-clash detection when one breath gives two deadlines for the same task.
-- Digest counts computed live: tasks heard, open, done, due today, no owner, clashes, unverified.
+For Cloudflare Pages, add `GEMINI_API_KEY` as an environment variable. For local testing, a user may enter a Gemini key in Settings; it is kept in page memory only and is not written to local storage. Never commit an API key to the repository or expose a shared key in client-side code.
 
-## Run it
+## Voice and language support
 
-No build step, no dependencies.
+- Typed input is sent to Gemini for language detection and extraction.
+- Voice capture uses the browser's Web Speech API and its current browser language setting. Browser speech recognition language coverage and accuracy vary; typing is the fallback.
+- Do not claim every language or dialect is equally supported. Test each target language with native speakers before describing it as supported.
 
-```
-python3 -m http.server 3000
-```
+## Run locally
 
-Open http://localhost:3000, tap the mic (Chrome on Android speaks all ten languages), or type. Tasks persist in this browser only. Export deadlines as `.ics`, copy the digest back into your group chat.
+This project uses Cloudflare Pages Functions for the AI endpoint. Install Wrangler, set a local secret with `wrangler pages secret put GEMINI_API_KEY`, then run `npx wrangler pages dev .`. Without the server secret, enter a Gemini key in Settings for a local test session.
 
-## Accessibility
+## Hackathon scope
 
-Easy read, high contrast, larger text, reduced motion — four toggles always visible. Keyboard-only usable throughout.
+Built for Teens Hack Houston (Triple H) 2026 — productivity theme. The demo should show one conversation generating multiple useful outputs, then show the user reviewing and exporting them.
 
-## Files
+## Privacy and safety notes
 
-| File | Purpose |
-| --- | --- |
-| `index.html` | Markup |
-| `styles.css` | Design and the four accessibility modes |
-| `understand.js` | Pidgin grammar engine, deadline resolver, verifier, self-test runner |
-| `data.js` | Languages, demo speech, 22-sentence self-test set |
-| `app.js` | Mic, free-AI layer, rendering, exports |
-| `functions/ai-proxy.js` | Optional edge relay used only if a provider blocks browser calls. Allowlisted hosts, stores nothing |
-
-## Built for
-
-Teens Hack Houston (TripleH) 2026 — theme: productivity.
-
-## Licence
-
-MIT
+- Voice recognition is handled by the browser's speech service; browser vendors may have their own processing practices.
+- Text submitted for AI processing is sent to Google's Gemini API.
+- Email drafts are not sent automatically.
+- Calendar events are not added to an account automatically; users export an `.ics` file.
+- Business records are local to the current page session in this MVP. No cloud sync or accounting compliance is claimed.
