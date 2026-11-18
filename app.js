@@ -1,13 +1,11 @@
 const $=(s,r=document)=>r.querySelector(s);
 const MAX_RECORD_MS=120000;
-const state={transcript:"",result:null,original:null,translatedInto:"",tab:"tasks",recorder:null,recording:false,chunks:[],stream:null,stopTimer:null,discard:false,apiKey:"",requestController:null};
+const state={transcript:"",result:null,original:null,translatedInto:"",tab:"tasks",recorder:null,recording:false,chunks:[],stream:null,stopTimer:null,discard:false,requestController:null};
 document.addEventListener("DOMContentLoaded",()=>{
  $("#typeBtn").addEventListener("click",organise);
  $("#demoBtn").addEventListener("click",()=>{$("#typedInput").value=DEMO_CONVERSATION;$("#typedInput").focus();toast("Demo conversation loaded");});
  $("#micBtn").addEventListener("click",toggleMic);
  $("#clearBtn").addEventListener("click",clearAll);
- $("#settingsBtn").addEventListener("click",()=>{const p=$("#settings");p.hidden=!p.hidden;$("#settingsBtn").setAttribute("aria-expanded",String(!p.hidden));});
- $("#apiKey").addEventListener("input",e=>state.apiKey=e.target.value.trim());
  $("#copySummary").addEventListener("click",copySummary);
  $("#translateBtn").addEventListener("click",translateResults);
  $("#showOriginal").addEventListener("click",showOriginal);
@@ -26,14 +24,14 @@ async function analyse(input){
  const btn=$("#typeBtn");btn.disabled=true;btn.textContent="Organising…";
  const controller=new AbortController();state.requestController=controller;
  try{
-  const response=await fetch("/api/understand",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...input,apiKey:state.apiKey}),signal:controller.signal});
+  const response=await fetch("/api/understand",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input),signal:controller.signal});
   const payload=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(payload.error||"AI request failed. Please try again.");
   if(!payload||typeof payload!=="object")throw new Error("The AI returned an invalid response. Please try again.");
   state.transcript=typeof payload.transcript==="string"?payload.transcript:(input.text||"");
-  state.original=normalise(payload);state.result=state.original;state.translatedInto="";
+  state.original=normalise(payload);state.original.reply=typeof payload.reply==="string"?payload.reply:"";state.result=state.original;state.translatedInto="";
   $("#showOriginal").hidden=true;$("#translateBar").hidden=false;
-  renderResults();
+  renderResults();renderReplyBox(state.original.reply);
   const heard=$("#heard");
   if(input.audio){heard.textContent="Dayline heard: “"+state.transcript+"”";heard.hidden=false;}else heard.hidden=true;
   $("#resultsPanel").hidden=false;
@@ -57,18 +55,19 @@ async function translateResults(){
  if(!state.original){toast("Organise a conversation first.");return;}
  const target=$("#targetLang").value.trim();if(!target){toast("Type or choose a language first.");return;}
  const btn=$("#translateBtn");btn.disabled=true;btn.textContent="Translating…";
- const subset={};Object.entries(TRANSLATABLE).forEach(([cat,keys])=>{subset[cat]=state.original[cat].map(i=>Object.fromEntries(keys.map(k=>[k,i[k]||""])));});
+ const subset={reply:state.original.reply||""};Object.entries(TRANSLATABLE).forEach(([cat,keys])=>{subset[cat]=state.original[cat].map(i=>Object.fromEntries(keys.map(k=>[k,i[k]||""])));});
  try{
-  const response=await fetch("/api/translate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({results:subset,targetLanguage:target,apiKey:state.apiKey})});
+  const response=await fetch("/api/translate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({results:subset,targetLanguage:target})});
   const payload=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(payload.error||"Translation failed. Please try again.");
-  const out={...state.original};
+  const out={...state.original};if(payload.reply)out.reply=payload.reply;renderReplyBox(out.reply);
   Object.entries(TRANSLATABLE).forEach(([cat,keys])=>{out[cat]=state.original[cat].map((item,i)=>{const t=(payload[cat]||[])[i]||{};const next={...item};keys.forEach(k=>{if(t[k])next[k]=t[k];});return next;});});
   state.result=out;state.translatedInto=target;renderResults();$("#showOriginal").hidden=false;toast("Translated into "+target+".");
  }catch(err){toast(err.message||"Translation failed.");}
  finally{btn.disabled=false;btn.textContent="Translate";}
 }
-function showOriginal(){state.result=state.original;state.translatedInto="";$("#showOriginal").hidden=true;renderResults();}
+function showOriginal(){state.result=state.original;state.translatedInto="";$("#showOriginal").hidden=true;renderResults();renderReplyBox(state.original.reply);}
+function renderReplyBox(text){const box=$("#replyBox");box.textContent=text||"";box.hidden=!text;}
 
 /* ---------- Clear ---------- */
 function clearAll(){
@@ -76,7 +75,7 @@ function clearAll(){
  if(state.recording){state.discard=true;stopRecording();}
  $("#typedInput").value="";
  state.result=null;state.transcript="";state.original=null;state.translatedInto="";
- $("#resultsPanel").hidden=true;$("#translateBar").hidden=true;$("#summary").innerHTML="";$("#tabContent").innerHTML="";$("#heard").hidden=true;
+ $("#resultsPanel").hidden=true;$("#translateBar").hidden=true;renderReplyBox("");$("#summary").innerHTML="";$("#tabContent").innerHTML="";$("#heard").hidden=true;
  $("#typedInput").focus();
  toast("Cleared. Start a new conversation.");
 }

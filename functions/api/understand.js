@@ -5,12 +5,13 @@ const MAX_AUDIO_BASE64=9000000;
 const schema={type:"OBJECT",properties:{
  detectedLanguage:{type:"STRING"},
  detectedLanguageCode:{type:"STRING"},
+ reply:{type:"STRING"},
  transcript:{type:"STRING"},
  tasks:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},owner:{type:"STRING"},dueDate:{type:"STRING"},amount:{type:"STRING"},status:{type:"STRING"},quote:{type:"STRING"}},required:["title","quote"]}},
  emails:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},recipient:{type:"STRING"},subject:{type:"STRING"},body:{type:"STRING"},quote:{type:"STRING"}},required:["subject","body","quote"]}},
  events:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},start:{type:"STRING"},location:{type:"STRING"},description:{type:"STRING"},quote:{type:"STRING"}},required:["title","quote"]}},
  businessItems:{type:"ARRAY",items:{type:"OBJECT",properties:{kind:{type:"STRING"},title:{type:"STRING"},amount:{type:"STRING"},dueDate:{type:"STRING"},counterparty:{type:"STRING"},status:{type:"STRING"},quote:{type:"STRING"}},required:["kind","title","quote"]}}
-},required:["detectedLanguage","detectedLanguageCode","transcript","tasks","emails","events","businessItems"]};
+},required:["detectedLanguage","detectedLanguageCode","reply","transcript","tasks","emails","events","businessItems"]};
 const fields={tasks:["title","owner","dueDate","amount","status","quote"],emails:["title","recipient","subject","body","quote"],events:["title","start","location","description","quote"],businessItems:["kind","title","amount","dueDate","counterparty","status","quote"]};
 function clean(value,max=5000){return typeof value==="string"?value.trim().slice(0,max):"";}
 function cleanItems(value,allowed,source){
@@ -46,9 +47,8 @@ export async function onRequestPost(context){
   if(String(body.text||"").length>MAX_TEXT)return response({error:"Keep each conversation under 18,000 characters."},413,origin);
  }
 
- const suppliedKey=clean(body.apiKey,2000);
- const key=context.env.GEMINI_API_KEY||suppliedKey;
- if(!key)return response({error:"Gemini is not configured. Add GEMINI_API_KEY to the server environment or enter a key in Settings."},503,origin);
+ const key=context.env.GEMINI_API_KEY;
+ if(!key)return response({error:"Gemini is not configured yet. The site owner needs to add the GEMINI_API_KEY variable."},503,origin);
  const system=[
   "You are Dayline, a multilingual productivity assistant.",
   "Detect the language the speaker actually uses, in any language or script (for example English, Nigerian Pidgin, Yoruba, Hausa, Igbo, French, Arabic, Chinese, Spanish). Do not ask the user to choose a language.",
@@ -64,6 +64,7 @@ export async function onRequestPost(context){
   "The transcript field must contain the words as spoken or written in their original language. For audio, transcribe first, then extract.",
   "Every item must include quote: an exact, contiguous substring copied from the transcript in its original script. Never paraphrase a quote. Omit an item if no exact supporting quote exists.",
   "Do not treat questions, hypotheticals, negations, or suggestions as completed actions.",
+  "The reply field is always required. Write it to the speaker, in the same language they used, as a short friendly message. If they asked a question, answer it. If the conversation is just chat or has no tasks, emails, events or business items, respond naturally and briefly explain what you understood, without inventing a task. If you did find items, summarise them in one or two sentences and say what to review. Never invent facts.",
   "Return JSON matching the schema and nothing else."
  ].join(" ");
  const parts=audio
@@ -86,6 +87,7 @@ export async function onRequestPost(context){
   const output={
    detectedLanguage:clean(parsed.detectedLanguage,100)||"Not identified",
    detectedLanguageCode:clean(parsed.detectedLanguageCode,20),
+   reply:clean(parsed.reply,3000),
    transcript:source,
    tasks:cleanItems(parsed.tasks,fields.tasks,source),
    emails:cleanItems(parsed.emails,fields.emails,source),

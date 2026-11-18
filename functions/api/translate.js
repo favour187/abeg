@@ -2,6 +2,7 @@ const MODEL="gemini-3.5-flash-lite";
 const API="https://generativelanguage.googleapis.com/v1beta/models/"+MODEL+":generateContent";
 const MAX_JSON=60000;
 const schema={type:"OBJECT",properties:{
+ reply:{type:"STRING"},
  tasks:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},status:{type:"STRING"}},required:["title"]}},
  emails:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},subject:{type:"STRING"},body:{type:"STRING"}},required:["subject","body"]}},
  events:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},location:{type:"STRING"},description:{type:"STRING"}},required:["title"]}},
@@ -26,13 +27,12 @@ export async function onRequestPost(context){
  if(!results||typeof results!=="object")return response({error:"Nothing to translate yet."},400,origin);
  const payloadText=JSON.stringify(results);
  if(payloadText.length>MAX_JSON)return response({error:"Too much text to translate at once."},413,origin);
- const suppliedKey=clean(body.apiKey,2000);
- const key=context.env.GEMINI_API_KEY||suppliedKey;
- if(!key)return response({error:"Gemini is not configured. Add GEMINI_API_KEY to the server environment or enter a key in Settings."},503,origin);
+ const key=context.env.GEMINI_API_KEY;
+ if(!key)return response({error:"Gemini is not configured yet. The site owner needs to add the GEMINI_API_KEY variable."},503,origin);
  const system=[
   "You translate short workplace items for Dayline.",
   "Translate the human-readable text fields into the target language named by the user, written naturally for that language.",
-  "Keep the same number of items in each array and the same order. Do not add or remove items.",
+  "Translate the reply field too, if present. Keep the same number of items in each array and the same order. Do not add or remove items.",
   "Keep names of people and companies, and amounts and numbers, as they are. Keep ISO dates and times unchanged.",
   "Return JSON matching the schema and nothing else."
  ].join(" ");
@@ -46,7 +46,7 @@ export async function onRequestPost(context){
   }
   const raw=result?.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("")||"";
   let parsed;try{parsed=JSON.parse(raw);}catch{return response({error:"Translation returned unreadable data. Please try again."},502,origin);}
-  const output={};
+  const output={reply:clean(parsed.reply,3000)};
   Object.entries(KEYS).forEach(([cat,keys])=>{
    const list=Array.isArray(parsed[cat])?parsed[cat].slice(0,12):[];
    output[cat]=list.map(item=>{const next={};keys.forEach(k=>next[k]=clean(item?.[k],k==="body"?5000:500));return next;});
