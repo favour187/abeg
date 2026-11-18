@@ -70,14 +70,14 @@ export async function onRequestPost(context){
  const parts=audio
   ?[{inlineData:{mimeType:audio.mimeType,data:audio.data}},{text:"VOICE RECORDING: transcribe the speech in the language spoken, then extract items from that transcript."}]
   :[{text:"ORIGINAL CONVERSATION:\n"+text}];
- const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts}],generationConfig:{temperature:0.15,responseMimeType:"application/json",responseSchema:schema}};
+ const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts}],generationConfig:{maxOutputTokens:4096,temperature:0.15,responseMimeType:"application/json",responseSchema:schema}};
  try{
   const upstream=await fetch(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(40000)});
   const result=await upstream.json().catch(()=>({}));
   if(!upstream.ok){
    if(upstream.status===400||upstream.status===403)return response({error:"Gemini rejected the request. Check that your API key and model access are valid."},502,origin);
    if(upstream.status===429)return response({error:"Gemini is busy or the current quota has been reached. Wait a moment and try again."},429,origin);
-   return response({error:"Gemini could not process this request. Please try again."},502,origin);
+   return response({detail:"HTTP "+upstream.status+": "+clean(result?.error?.message||"",300),error:"Gemini could not process this request. Please try again."},502,origin);
   }
   const raw=result?.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("")||"";
   if(!raw)return response({error:"Gemini returned no usable result. Try a shorter conversation."},502,origin);

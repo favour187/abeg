@@ -36,13 +36,13 @@ export async function onRequestPost(context){
   "Keep names of people and companies, and amounts and numbers, as they are. Keep ISO dates and times unchanged.",
   "Return JSON matching the schema and nothing else."
  ].join(" ");
- const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text:"TARGET LANGUAGE: "+target+"\nITEMS (JSON):\n"+payloadText}]}],generationConfig:{temperature:0.2,responseMimeType:"application/json",responseSchema:schema}};
+ const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text:"TARGET LANGUAGE: "+target+"\nITEMS (JSON):\n"+payloadText}]}],generationConfig:{maxOutputTokens:2048,temperature:0.2,responseMimeType:"application/json",responseSchema:schema}};
  try{
   const upstream=await fetch(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(30000)});
   const result=await upstream.json().catch(()=>({}));
   if(!upstream.ok){
    if(upstream.status===429)return response({error:"Gemini is busy or the current quota has been reached. Wait a moment and try again."},429,origin);
-   return response({error:"Translation failed. Please try again."},502,origin);
+   return response({detail:"HTTP "+upstream.status+": "+clean(result?.error?.message||"",300),error:"Translation failed. Please try again."},502,origin);
   }
   const raw=result?.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("")||"";
   let parsed;try{parsed=JSON.parse(raw);}catch{return response({error:"Translation returned unreadable data. Please try again."},502,origin);}
