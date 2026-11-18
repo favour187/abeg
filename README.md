@@ -19,7 +19,7 @@ A matching quote is evidence that the words appeared in the conversation; it is 
 
 The server endpoint uses Google's Gemini API with structured JSON output. The default model is `gemini-3.5-flash-lite`. Model availability and free-tier limits can change.
 
-For Cloudflare Pages, add `GEMINI_API_KEY` as an environment variable. For local testing, a user may enter a Gemini key in Settings; it is kept in page memory only and is not written to local storage. Never commit an API key to the repository or expose a shared key in client-side code.
+For Cloudflare Pages, use the repository root (`.`) as the build output directory with no build command, then add `GEMINI_API_KEY` as an environment variable. For local testing, a user may enter a Gemini key in Settings; it is kept in page memory only and is not written to local storage. Never commit an API key to the repository or expose a shared key in client-side code.
 
 ## Voice and language support
 
@@ -37,7 +37,7 @@ Run `npm run check` to syntax-check the browser scripts and Cloudflare Pages Fun
 
 ## Run locally
 
-This project uses Cloudflare Pages Functions for the AI endpoint. Install Wrangler, set a local secret with `wrangler pages secret put GEMINI_API_KEY`, then run `npx wrangler pages dev .`. Without the server secret, enter a Gemini key in Settings for a local test session.
+This project uses Cloudflare Pages Functions for the AI endpoint. Run `npm run dev` to start the local Cloudflare Pages preview. Set a local secret with `npx wrangler pages secret put GEMINI_API_KEY` first, or enter a Gemini key in Settings for a temporary test session. Without the server secret, enter a Gemini key in Settings for a local test session.
 
 ## Hackathon scope
 
