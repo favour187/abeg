@@ -7,12 +7,31 @@ const schema={type:"OBJECT",properties:{
  events:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},start:{type:"STRING"},location:{type:"STRING"},description:{type:"STRING"},quote:{type:"STRING"}},required:["title","quote"]}},
  businessItems:{type:"ARRAY",items:{type:"OBJECT",properties:{kind:{type:"STRING"},title:{type:"STRING"},amount:{type:"STRING"},dueDate:{type:"STRING"},counterparty:{type:"STRING"},status:{type:"STRING"},quote:{type:"STRING"}},required:["kind","title","quote"]}}
 },required:["detectedLanguage","tasks","emails","events","businessItems"]};
+const fields={tasks:["title","owner","dueDate","amount","status","quote"],emails:["title","recipient","subject","body","quote"],events:["title","start","location","description","quote"],businessItems:["kind","title","amount","dueDate","counterparty","status","quote"]};
+function clean(value,max=5000){return typeof value==="string"?value.trim().slice(0,max):"";}
+function cleanItems(value,allowed,source){
+ if(!Array.isArray(value))return [];
+ return value.slice(0,12).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).map(item=>{
+  const next={};allowed.forEach(key=>next[key]=clean(item[key],key==="body"?5000:500));
+  return next;
+ }).filter(item=>item.quote&&source.includes(item.quote));
+}
+function response(body,status,origin){
+ const headers={"Content-Type":"application/json","Cache-Control":"no-store","Vary":"Origin"};
+ if(origin)headers["Access-Control-Allow-Origin"]=origin;
+ return new Response(JSON.stringify(body),{status,headers});
+}
 export async function onRequestPost(context){
- const headers={"Content-Type":"application/json","Access-Control-Allow-Origin":"*"};
- const fail=(message,status)=>new Response(JSON.stringify({error:message}),{status,headers});
- let body;try{body=await context.request.json();}catch{return fail("Invalid request body.",400);}
- const text=String(body.text||"").trim();if(!text)return fail("Add a conversation first.",400);if(text.length>18000)return fail("Keep each conversation under 18,000 characters.",413);
- const key=context.env.GEMINI_API_KEY||String(body.apiKey||"").trim();if(!key)return fail("Gemini is not configured. Add GEMINI_API_KEY to the server environment or enter a key in Settings.",503);
+ const origin=context.request.headers.get("Origin");
+ const requestUrl=new URL(context.request.url);
+ if(origin){try{if(new URL(origin).origin!==requestUrl.origin)return response({error:"Cross-origin requests are not allowed."},403);}catch{return response({error:"Invalid request origin."},403);}}
+ let body;try{body=await context.request.json();}catch{return response({error:"Invalid request body."},400,origin);}
+ const text=clean(body.text,18000);
+ if(!text)return response({error:"Add a conversation first."},400,origin);
+ if(String(body.text||"").length>18000)return response({error:"Keep each conversation under 18,000 characters."},413,origin);
+ const suppliedKey=clean(body.apiKey,2000);
+ const key=context.env.GEMINI_API_KEY||suppliedKey;
+ if(!key)return response({error:"Gemini is not configured. Add GEMINI_API_KEY to the server environment or enter a key in Settings."},503,origin);
  const system=[
  "You are Dayline, a multilingual productivity assistant.",
  "Detect the language or languages used in the transcript. Do not ask the user to choose a language.",
@@ -21,7 +40,7 @@ export async function onRequestPost(context){
  "Extract only information supported by the transcript. Never invent people, amounts, dates, commitments, email addresses, or event times.",
  "Create tasks only for clear actions and responsibilities. Use empty strings when owner, due date, amount, or status is unknown.",
  "Create an email draft only when the transcript requests a message, email, reply, or update. Never send it.",
- "Create calendar events only when an event or meeting is mentioned. Use ISO 8601 for a known date and time. If year or timezone is unclear, do not guess; leave start empty.",
+ "Create calendar events only when an event or meeting is mentioned. Use ISO 8601 for a known date and time. If year, time, or timezone is unclear, do not guess; leave start empty.",
  "Create businessItems only for clearly mentioned jobs, expenses, invoices, payments, or balances. kind must be job, expense, invoice, payment, balance, or other.",
  "Every item must include quote: an exact, contiguous substring copied from the original transcript in its original script. Never paraphrase a quote. Omit an item if no exact supporting quote exists.",
  "Do not treat questions, hypotheticals, negations, or suggestions as completed actions.",
@@ -29,11 +48,32 @@ export async function onRequestPost(context){
  ].join(" ");
  const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text:"ORIGINAL CONVERSATION:\n"+text}]}],generationConfig:{temperature:0.15,responseMimeType:"application/json",responseSchema:schema}};
  try{
-  const response=await fetch(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody)});
-  const result=await response.json();if(!response.ok)return fail(result?.error?.message||"Gemini request failed ("+response.status+").",response.status===429?429:502);
-  const raw=result?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";if(!raw)return fail("Gemini returned an empty response. Try a shorter conversation.",502);
-  let parsed;try{parsed=JSON.parse(raw);}catch{return fail("Gemini returned unreadable structured data. Please try again.",502);}
-  return new Response(JSON.stringify(parsed),{status:200,headers});
- }catch{return fail("Could not connect to Gemini. Check the network and try again.",502);}
+  const upstream=await fetch(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(25000)});
+  const result=await upstream.json().catch(()=>({}));
+  if(!upstream.ok){
+   if(upstream.status===400||upstream.status===403)return response({error:"Gemini rejected the request. Check that your API key and model access are valid."},502,origin);
+   if(upstream.status===429)return response({error:"Gemini is busy or the current quota has been reached. Wait a moment and try again."},429,origin);
+   return response({error:"Gemini could not process this request. Please try again."},502,origin);
+  }
+  const raw=result?.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("")||"";
+  if(!raw)return response({error:"Gemini returned no usable result. Try a shorter conversation."},502,origin);
+  let parsed;try{parsed=JSON.parse(raw);}catch{return response({error:"Gemini returned unreadable data. Please try again."},502,origin);}
+  const output={
+   detectedLanguage:clean(parsed.detectedLanguage,100)||"Not identified",
+   tasks:cleanItems(parsed.tasks,fields.tasks,text),
+   emails:cleanItems(parsed.emails,fields.emails,text),
+   events:cleanItems(parsed.events,fields.events,text),
+   businessItems:cleanItems(parsed.businessItems,fields.businessItems,text)
+  };
+  return response(output,200,origin);
+ }catch(error){
+  if(error?.name==="TimeoutError")return response({error:"Gemini took too long to respond. Try again with a shorter conversation."},504,origin);
+  return response({error:"Could not connect to Gemini. Check your connection and try again."},502,origin);
+ }
 }
-export async function onRequestOptions(){return new Response(null,{headers:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type"}});}
+export async function onRequestOptions(context){
+ const origin=context.request.headers.get("Origin");
+ const requestUrl=new URL(context.request.url);
+ if(origin){try{if(new URL(origin).origin!==requestUrl.origin)return new Response(null,{status:403});}catch{return new Response(null,{status:403});}}
+ return new Response(null,{headers:{"Access-Control-Allow-Origin":origin||requestUrl.origin,"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400","Vary":"Origin"}});
+}
