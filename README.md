@@ -31,13 +31,9 @@ For Cloudflare Pages, use the repository root (`.`) as the build output director
 
 Run `npm run check` to syntax-check the browser scripts and Cloudflare Pages Function with Node.js 22 or newer. A GitHub Actions workflow runs this check on pushes and pull requests.
 
-## Quality checks
-
-Run `npm run check` to syntax-check the browser scripts and Cloudflare Pages Function with Node.js 22 or newer. A GitHub Actions workflow runs this check on pushes and pull requests.
-
 ## Run locally
 
-This project uses Cloudflare Pages Functions for the AI endpoint. Run `npm run dev` to start the local Cloudflare Pages preview. Set a local secret with `npx wrangler pages secret put GEMINI_API_KEY` first, or enter a Gemini key in Settings for a temporary test session. Without the server secret, enter a Gemini key in Settings for a local test session.
+This project uses Cloudflare Pages Functions for the AI endpoint. Run `npm run dev` to start the local Cloudflare Pages preview (Node.js 22 or newer recommended). Set a local secret with `npx wrangler pages secret put GEMINI_API_KEY` first, or enter a Gemini key in Settings for a temporary test session. Without the server secret, enter a Gemini key in Settings for a local test session.
 
 ## Hackathon scope
 
