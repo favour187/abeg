@@ -5,7 +5,7 @@
 Dayline is a multilingual productivity workspace. Users can type or speak naturally, and the app organises the conversation into:
 
 - **Tasks** — action items, owners, due dates and progress.
-- **Email drafts** — suggested subject lines and message bodies for review; Dayline does not send them.
+- **Email drafts** — editable subject lines and message bodies for review; copy them when ready. Dayline does not send them.
 - **Calendar events** — suggested events with an `.ics` export.
 - **Business desk** — lightweight job, expense and invoice records.
 
@@ -13,7 +13,7 @@ Dayline is a multilingual productivity workspace. Users can type or speak natura
 
 Dayline uses the conversation as the starting point. Users do not choose a language first: the AI detects the language from the text and is instructed to keep generated content in that language. Each generated item includes an exact source quote. The app checks whether that quote exists in the original text and flags unmatched evidence.
 
-A matching quote is evidence that the words appeared in the conversation; it is **not** proof that the AI interpreted them correctly. Users must review suggestions before acting on them.
+A matching quote is evidence that the words appeared in the conversation; it is **not** proof that the AI interpreted them correctly. The server also drops generated items whose quote is not an exact substring of the submitted text. Users must review suggestions before acting on them.
 
 ## AI
 
@@ -26,6 +26,10 @@ For Cloudflare Pages, add `GEMINI_API_KEY` as an environment variable. For local
 - Typed input is sent to Gemini for language detection and extraction.
 - Voice capture uses the browser's Web Speech API and its current browser language setting. Browser speech recognition language coverage and accuracy vary; typing is the fallback.
 - Do not claim every language or dialect is equally supported. Test each target language with native speakers before describing it as supported.
+
+## Quality checks
+
+Run `npm run check` to syntax-check the browser scripts and Cloudflare Pages Function with Node.js 22 or newer. A GitHub Actions workflow runs this check on pushes and pull requests.
 
 ## Run locally
 
