@@ -17,3 +17,5 @@ a.link-btn{display:inline-flex;align-items:center;text-decoration:none}
 .reply-box{margin:0 0 18px;padding:18px 20px;border-radius:18px;background:linear-gradient(135deg,#eefcf7,#f1ecff);border:1px solid var(--line);white-space:pre-wrap;font-size:16px;line-height:1.6}
 .translate-bar input{height:46px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:#fbfcfd;color:var(--ink);width:100%}
 .translate-bar .field span{display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.translate-bar .field{display:block;align-self:flex-start}
+.translate-bar .field input{display:block;height:46px;min-height:46px;max-height:46px}
