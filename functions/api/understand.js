@@ -26,6 +26,7 @@ export async function onRequestPost(context){
  const requestUrl=new URL(context.request.url);
  if(origin){try{if(new URL(origin).origin!==requestUrl.origin)return response({error:"Cross-origin requests are not allowed."},403);}catch{return response({error:"Invalid request origin."},403);}}
  let body;try{body=await context.request.json();}catch{return response({error:"Invalid request body."},400,origin);}
+ if(!body||typeof body!=="object"||Array.isArray(body))return response({error:"Invalid request body."},400,origin);
  const text=clean(body.text,18000);
  if(!text)return response({error:"Add a conversation first."},400,origin);
  if(String(body.text||"").length>18000)return response({error:"Keep each conversation under 18,000 characters."},413,origin);
