@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js && node --check understand.js && node --check data.js && node --check functions/api/understand.js"
+    "check": "node --check app.js && node --check understand.js && node --check data.js && node --check functions/api/understand.js",
+    "dev": "npx wrangler pages dev ."
   }
 }
