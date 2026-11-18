@@ -4,12 +4,13 @@ const MAX_TEXT=18000;
 const MAX_AUDIO_BASE64=9000000;
 const schema={type:"OBJECT",properties:{
  detectedLanguage:{type:"STRING"},
+ detectedLanguageCode:{type:"STRING"},
  transcript:{type:"STRING"},
  tasks:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},owner:{type:"STRING"},dueDate:{type:"STRING"},amount:{type:"STRING"},status:{type:"STRING"},quote:{type:"STRING"}},required:["title","quote"]}},
  emails:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},recipient:{type:"STRING"},subject:{type:"STRING"},body:{type:"STRING"},quote:{type:"STRING"}},required:["subject","body","quote"]}},
  events:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},start:{type:"STRING"},location:{type:"STRING"},description:{type:"STRING"},quote:{type:"STRING"}},required:["title","quote"]}},
  businessItems:{type:"ARRAY",items:{type:"OBJECT",properties:{kind:{type:"STRING"},title:{type:"STRING"},amount:{type:"STRING"},dueDate:{type:"STRING"},counterparty:{type:"STRING"},status:{type:"STRING"},quote:{type:"STRING"}},required:["kind","title","quote"]}}
-},required:["detectedLanguage","transcript","tasks","emails","events","businessItems"]};
+},required:["detectedLanguage","detectedLanguageCode","transcript","tasks","emails","events","businessItems"]};
 const fields={tasks:["title","owner","dueDate","amount","status","quote"],emails:["title","recipient","subject","body","quote"],events:["title","start","location","description","quote"],businessItems:["kind","title","amount","dueDate","counterparty","status","quote"]};
 function clean(value,max=5000){return typeof value==="string"?value.trim().slice(0,max):"";}
 function cleanItems(value,allowed,source){
@@ -50,9 +51,11 @@ export async function onRequestPost(context){
  if(!key)return response({error:"Gemini is not configured. Add GEMINI_API_KEY to the server environment or enter a key in Settings."},503,origin);
  const system=[
   "You are Dayline, a multilingual productivity assistant.",
-  "Detect the language or languages used in the conversation. Do not ask the user to choose a language.",
+  "Detect the language the speaker actually uses, in any language or script (for example English, Nigerian Pidgin, Yoruba, Hausa, Igbo, French, Arabic, Chinese, Spanish). Do not ask the user to choose a language.",
+  "Nigerian Pidgin is its own language. Label it detectedLanguage Nigerian Pidgin with detectedLanguageCode pcm. Never label Pidgin as English, even though many of its words come from English. If the speaker mixes languages, name the main one and add the others, for example Nigerian Pidgin with English, and give the main code.",
+  "detectedLanguageCode must be a BCP-47 code such as en, pcm, zh, yo, ha, ig, fr, ar, es.",
   "Understand the original speech or text directly. Never translate it into English before reasoning, and never translate the transcript.",
-  "Return task titles and email drafts in the language used by the speaker unless another language is explicitly requested.",
+  "Write every title, owner, status, email subject and body, event title and description in the same language and script the speaker used. For Nigerian Pidgin write in Nigerian Pidgin, for Chinese write in Chinese characters. Only switch language if the speaker explicitly asks for another language.",
   "Extract only information supported by the conversation. Never invent people, amounts, dates, commitments, email addresses, or event times.",
   "Create tasks only for clear actions and responsibilities. Use empty strings when owner, due date, amount, or status is unknown.",
   "Create an email draft only when the conversation requests a message, email, reply, or update. Never send it.",
@@ -82,6 +85,7 @@ export async function onRequestPost(context){
   if(audio&&!source)return response({error:"Dayline could not hear any speech. Try again, closer to the microphone."},422,origin);
   const output={
    detectedLanguage:clean(parsed.detectedLanguage,100)||"Not identified",
+   detectedLanguageCode:clean(parsed.detectedLanguageCode,20),
    transcript:source,
    tasks:cleanItems(parsed.tasks,fields.tasks,source),
    emails:cleanItems(parsed.emails,fields.emails,source),

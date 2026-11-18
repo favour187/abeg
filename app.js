@@ -1,6 +1,6 @@
 const $=(s,r=document)=>r.querySelector(s);
 const MAX_RECORD_MS=120000;
-const state={transcript:"",result:null,tab:"tasks",recorder:null,recording:false,chunks:[],stream:null,stopTimer:null,discard:false,apiKey:"",requestController:null};
+const state={transcript:"",result:null,original:null,translatedInto:"",tab:"tasks",recorder:null,recording:false,chunks:[],stream:null,stopTimer:null,discard:false,apiKey:"",requestController:null};
 document.addEventListener("DOMContentLoaded",()=>{
  $("#typeBtn").addEventListener("click",organise);
  $("#demoBtn").addEventListener("click",()=>{$("#typedInput").value=DEMO_CONVERSATION;$("#typedInput").focus();toast("Demo conversation loaded");});
@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded",()=>{
  $("#settingsBtn").addEventListener("click",()=>{const p=$("#settings");p.hidden=!p.hidden;$("#settingsBtn").setAttribute("aria-expanded",String(!p.hidden));});
  $("#apiKey").addEventListener("input",e=>state.apiKey=e.target.value.trim());
  $("#copySummary").addEventListener("click",copySummary);
+ $("#translateBtn").addEventListener("click",translateResults);
+ $("#showOriginal").addEventListener("click",showOriginal);
  document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
 });
 
@@ -29,7 +31,8 @@ async function analyse(input){
   if(!response.ok)throw new Error(payload.error||"AI request failed. Please try again.");
   if(!payload||typeof payload!=="object")throw new Error("The AI returned an invalid response. Please try again.");
   state.transcript=typeof payload.transcript==="string"?payload.transcript:(input.text||"");
-  state.result=normalise(payload);
+  state.original=normalise(payload);state.result=state.original;state.translatedInto="";
+  $("#showOriginal").hidden=true;$("#translateBar").hidden=false;
   renderResults();
   const heard=$("#heard");
   if(input.audio){heard.textContent="Dayline heard: “"+state.transcript+"”";heard.hidden=false;}else heard.hidden=true;
@@ -48,20 +51,40 @@ function normalise(data){
 }
 function quoteExists(quote,transcript){return !!quote&&!!transcript&&String(transcript).toLocaleLowerCase().includes(String(quote).trim().toLocaleLowerCase());}
 
+/* ---------- Translate results ---------- */
+const TRANSLATABLE={tasks:["title","status"],emails:["title","subject","body"],events:["title","location","description"],businessItems:["title","counterparty","status"]};
+async function translateResults(){
+ if(!state.original){toast("Organise a conversation first.");return;}
+ const target=$("#targetLang").value.trim();if(!target){toast("Type or choose a language first.");return;}
+ const btn=$("#translateBtn");btn.disabled=true;btn.textContent="Translating…";
+ const subset={};Object.entries(TRANSLATABLE).forEach(([cat,keys])=>{subset[cat]=state.original[cat].map(i=>Object.fromEntries(keys.map(k=>[k,i[k]||""])));});
+ try{
+  const response=await fetch("/api/translate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({results:subset,targetLanguage:target,apiKey:state.apiKey})});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(payload.error||"Translation failed. Please try again.");
+  const out={...state.original};
+  Object.entries(TRANSLATABLE).forEach(([cat,keys])=>{out[cat]=state.original[cat].map((item,i)=>{const t=(payload[cat]||[])[i]||{};const next={...item};keys.forEach(k=>{if(t[k])next[k]=t[k];});return next;});});
+  state.result=out;state.translatedInto=target;renderResults();$("#showOriginal").hidden=false;toast("Translated into "+target+".");
+ }catch(err){toast(err.message||"Translation failed.");}
+ finally{btn.disabled=false;btn.textContent="Translate";}
+}
+function showOriginal(){state.result=state.original;state.translatedInto="";$("#showOriginal").hidden=true;renderResults();}
+
 /* ---------- Clear ---------- */
 function clearAll(){
  if(state.requestController)state.requestController.abort();
  if(state.recording){state.discard=true;stopRecording();}
  $("#typedInput").value="";
- state.result=null;state.transcript="";
- $("#resultsPanel").hidden=true;$("#summary").innerHTML="";$("#tabContent").innerHTML="";$("#heard").hidden=true;
+ state.result=null;state.transcript="";state.original=null;state.translatedInto="";
+ $("#resultsPanel").hidden=true;$("#translateBar").hidden=true;$("#summary").innerHTML="";$("#tabContent").innerHTML="";$("#heard").hidden=true;
  $("#typedInput").focus();
  toast("Cleared. Start a new conversation.");
 }
 
 /* ---------- Results ---------- */
 function renderResults(){
- const r=state.result;$("#languageLabel").textContent="Detected language: "+r.language+" · Review every suggestion before acting.";
+ const r=state.result;const orig=state.original||r;
+ $("#languageLabel").textContent="Detected language: "+orig.language+" · Review every suggestion before acting."+(state.translatedInto?" Shown in: "+state.translatedInto+" (quotes stay in the original words).":"");
  const counts=[["Tasks",r.tasks.length],["Email drafts",r.emails.length],["Calendar events",r.events.length],["Business records",r.businessItems.length]];
  $("#summary").innerHTML=counts.map(([label,n])=>'<div class="summary-card"><strong>'+n+'</strong><span>'+label+'</span></div>').join("");
  $("#tasksCount").textContent=r.tasks.length;$("#emailsCount").textContent=r.emails.length;$("#eventsCount").textContent=r.events.length;$("#businessCount").textContent=r.businessItems.length;switchTab(state.tab);
@@ -117,17 +140,19 @@ function gmailUrl(item){
  return "https://mail.google.com/mail/?"+qs(params);
 }
 function calendarUrl(item){
- const start=new Date(item.start);if(Number.isNaN(start.getTime()))return "";
- const end=new Date(start.getTime()+60*60000);
  const fmt=d=>d.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");
- return "https://calendar.google.com/calendar/render?"+qs({action:"TEMPLATE",text:item.title||"Dayline event",dates:fmt(start)+"/"+fmt(end),details:item.description||item.quote||"",location:item.location||""});
+ const params={action:"TEMPLATE",text:item.title||"Dayline event",details:item.description||item.quote||"",location:item.location||""};
+ const start=item.start?new Date(item.start):null;
+ if(start&&!Number.isNaN(start.getTime())){params.dates=fmt(start)+"/"+fmt(new Date(start.getTime()+60*60000));}
+ return "https://calendar.google.com/calendar/render?"+qs(params);
 }
 function reminderUrl(item){
- const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(item.dueDate||"");if(!m)return "";
- const day=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));const next=new Date(day.getTime()+86400000);
  const f=d=>d.toISOString().slice(0,10).replace(/-/g,"");
- const details=[item.owner?"Owner: "+item.owner:"",item.status?"Status: "+item.status:"",item.quote?"Source: "+item.quote:""].filter(Boolean).join("\n");
- return "https://calendar.google.com/calendar/render?"+qs({action:"TEMPLATE",text:"Reminder: "+(item.title||"Task"),dates:f(day)+"/"+f(next),details});
+ const details=[item.owner?"Owner: "+item.owner:"",item.status?"Status: "+item.status:"",item.dueDate?"Due: "+item.dueDate:"",item.quote?"Source: "+item.quote:""].filter(Boolean).join("\n");
+ const params={action:"TEMPLATE",text:"Reminder: "+(item.title||"Task"),details};
+ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(item.dueDate||"");
+ if(m){const day=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));params.dates=f(day)+"/"+f(new Date(day.getTime()+86400000));}
+ return "https://calendar.google.com/calendar/render?"+qs(params);
 }
 
 /* ---------- Calendar file export ---------- */
