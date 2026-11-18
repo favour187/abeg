@@ -15,3 +15,5 @@ a.link-btn{display:inline-flex;align-items:center;text-decoration:none}
 .heard{margin:0 0 16px;padding:12px 16px;border-radius:14px;background:#eef6ff;color:var(--ink);font-style:italic}
 .translate-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:0 0 18px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--paper)}.translate-bar .field{flex:1;min-width:220px;margin:0}
 .reply-box{margin:0 0 18px;padding:18px 20px;border-radius:18px;background:linear-gradient(135deg,#eefcf7,#f1ecff);border:1px solid var(--line);white-space:pre-wrap;font-size:16px;line-height:1.6}
+.translate-bar input{height:46px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:#fbfcfd;color:var(--ink);width:100%}
+.translate-bar .field span{display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px}
