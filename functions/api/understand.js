@@ -13,6 +13,15 @@ const schema={type:"OBJECT",properties:{
  businessItems:{type:"ARRAY",items:{type:"OBJECT",properties:{kind:{type:"STRING"},title:{type:"STRING"},amount:{type:"STRING"},dueDate:{type:"STRING"},counterparty:{type:"STRING"},status:{type:"STRING"},quote:{type:"STRING"}},required:["kind","title","quote"]}}
 },required:["detectedLanguage","detectedLanguageCode","reply","transcript","tasks","emails","events","businessItems"]};
 const fields={tasks:["title","owner","dueDate","amount","status","quote"],emails:["title","recipient","subject","body","quote"],events:["title","start","location","description","quote"],businessItems:["kind","title","amount","dueDate","counterparty","status","quote"]};
+async function fetchWithRetry(url,init){
+ let last;
+ for(let attempt=0;attempt<3;attempt++){
+  last=await fetch(url,init);
+  if(last.status!==503&&last.status!==429)return last;
+  await new Promise(r=>setTimeout(r,1500*(attempt+1)));
+ }
+ return last;
+}
 function clean(value,max=5000){return typeof value==="string"?value.trim().slice(0,max):"";}
 function cleanItems(value,allowed,source){
  if(!Array.isArray(value))return [];
@@ -72,7 +81,7 @@ export async function onRequestPost(context){
   :[{text:"ORIGINAL CONVERSATION:\n"+text}];
  const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts}],generationConfig:{maxOutputTokens:4096,temperature:0.15,responseMimeType:"application/json",responseSchema:schema}};
  try{
-  const upstream=await fetch(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(40000)});
+  const upstream=await fetchWithRetry(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(40000)});
   const result=await upstream.json().catch(()=>({}));
   if(!upstream.ok){
    if(upstream.status===400||upstream.status===403)return response({error:"Gemini rejected the request. Check that your API key and model access are valid."},502,origin);

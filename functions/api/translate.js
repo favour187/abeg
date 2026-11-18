@@ -9,6 +9,15 @@ const schema={type:"OBJECT",properties:{
  businessItems:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},counterparty:{type:"STRING"},status:{type:"STRING"}},required:["title"]}}
 },required:["tasks","emails","events","businessItems"]};
 const KEYS={tasks:["title","status"],emails:["title","subject","body"],events:["title","location","description"],businessItems:["title","counterparty","status"]};
+async function fetchWithRetry(url,init){
+ let last;
+ for(let attempt=0;attempt<3;attempt++){
+  last=await fetch(url,init);
+  if(last.status!==503&&last.status!==429)return last;
+  await new Promise(r=>setTimeout(r,1500*(attempt+1)));
+ }
+ return last;
+}
 function clean(value,max=5000){return typeof value==="string"?value.trim().slice(0,max):"";}
 function response(body,status,origin){
  const headers={"Content-Type":"application/json","Cache-Control":"no-store","Vary":"Origin"};
@@ -38,7 +47,7 @@ export async function onRequestPost(context){
  ].join(" ");
  const requestBody={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text:"TARGET LANGUAGE: "+target+"\nITEMS (JSON):\n"+payloadText}]}],generationConfig:{maxOutputTokens:2048,temperature:0.2,responseMimeType:"application/json",responseSchema:schema}};
  try{
-  const upstream=await fetch(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(30000)});
+  const upstream=await fetchWithRetry(API+"?key="+encodeURIComponent(key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(requestBody),signal:AbortSignal.timeout(30000)});
   const result=await upstream.json().catch(()=>({}));
   if(!upstream.ok){
    if(upstream.status===429)return response({error:"Gemini is busy or the current quota has been reached. Wait a moment and try again."},429,origin);
