@@ -38,7 +38,7 @@ Built for Teens Hack Houston (Triple H) 2026 — productivity theme. The demo sh
 ## Privacy and safety notes
 
 - Voice recognition is handled by the browser's speech service; browser vendors may have their own processing practices.
-- Text submitted for AI processing is sent to Google's Gemini API.
+- Text submitted for AI processing is sent to Google's Gemini API. Google's free tier may use submitted content to improve its products; do not enter sensitive or confidential information.
 - Email drafts are not sent automatically.
 - Calendar events are not added to an account automatically; users export an `.ics` file.
 - Business records are local to the current page session in this MVP. No cloud sync or accounting compliance is claimed.
