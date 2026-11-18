@@ -1,5 +1,5 @@
 const $=(s,r=document)=>r.querySelector(s);
-const state={transcript:"",result:null,tab:"tasks",listening:false,recognition:null,apiKey:""};
+const state={transcript:"",result:null,tab:"tasks",listening:false,recognition:null,apiKey:"",requestController:null};
 document.addEventListener("DOMContentLoaded",()=>{
  $("#typeBtn").addEventListener("click",organise);
  $("#demoBtn").addEventListener("click",()=>{$("#typedInput").value=DEMO_CONVERSATION;$("#typedInput").focus();toast("Demo conversation loaded");});
@@ -13,14 +13,16 @@ async function organise(){
  const text=$("#typedInput").value.trim();if(!text){toast("Add a conversation first.");return;}
  const btn=$("#typeBtn");btn.disabled=true;btn.textContent="Organising…";state.transcript=text;
  try{
-  const response=await fetch("/api/understand",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,apiKey:state.apiKey})});
-  const payload=await response.json();if(!response.ok)throw new Error(payload.error||"AI request failed");
+  state.requestController=new AbortController();
+  const response=await fetch("/api/understand",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,apiKey:state.apiKey}),signal:state.requestController.signal});
+  const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||"AI request failed. Please try again.");
+  if(!payload||typeof payload!=="object")throw new Error("The AI returned an invalid response. Please try again.");
   state.result=normalise(payload);renderResults();$("#resultsPanel").hidden=false;$("#resultsPanel").scrollIntoView({behavior:"smooth",block:"start"});toast("Your conversation has been organised.");
  }catch(err){toast(err.message||"Could not reach Gemini. Check the AI setup.");}
- finally{btn.disabled=false;btn.innerHTML='Organise conversation <span>→</span>';}
+ finally{state.requestController=null;btn.disabled=false;btn.innerHTML='Organise conversation <span>→</span>';}
 }
 function normalise(data){
- const map=(arr,kind)=>Array.isArray(arr)?arr.map(item=>({...item,kind,evidenceFound:quoteExists(item.quote,state.transcript),done:false})): [];
+ const map=(arr,kind)=>Array.isArray(arr)?arr.filter(item=>item&&typeof item==="object").map(item=>({...item,kind,evidenceFound:quoteExists(item.quote,state.transcript),done:false})): [];
  return{language:data.detectedLanguage||"Language not identified",tasks:map(data.tasks,"task"),emails:map(data.emails,"email"),events:map(data.events,"event"),businessItems:map(data.businessItems,"business")};
 }
 function renderResults(){
@@ -52,14 +54,15 @@ function exportCalendar(){
 }
 function icsDate(d){return d.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");}
 function copySummary(){const r=state.result;if(!r)return;const lines=["DAYLINE OVERVIEW","Detected language: "+r.language,"","TASKS",...r.tasks.map(t=>"- "+(t.title||t.task)+" — "+(t.owner||"Unassigned")+" — "+(t.dueDate||"No due date")),"","EMAIL DRAFTS",...r.emails.map(e=>"- "+(e.subject||e.title||"Draft")),"","CALENDAR",...r.events.map(e=>"- "+(e.title||"Event")+" — "+(e.start||"Date not set")),"","BUSINESS",...r.businessItems.map(b=>"- "+(b.kind||"Record")+": "+(b.title||"Item")+" — "+(b.amount||"No amount"))];copyText(lines.join("\n"));}
-function copyText(text){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).then(()=>toast("Copied to clipboard."),()=>toast("Copy was blocked."));else toast("Clipboard is unavailable.");}
+function copyText(text){if(navigator.clipboard?.writeText){navigator.clipboard.writeText(text).then(()=>toast("Copied to clipboard."),()=>fallbackCopy(text));return;}fallbackCopy(text);}
+function fallbackCopy(text){const field=document.createElement("textarea");field.value=text;field.setAttribute("readonly","");field.style.position="fixed";field.style.opacity="0";document.body.appendChild(field);field.select();let copied=false;try{copied=document.execCommand("copy");}catch{}field.remove();toast(copied?"Copied to clipboard.":"Clipboard access is unavailable.");}
 function download(name,content,type){const a=document.createElement("a");const url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Calendar exported.");}
 function toggleMic(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input is not supported here. You can still type in any language.");return;}if(state.listening){state.recognition.stop();return;}
  const rec=new SR();state.recognition=rec;rec.lang=navigator.language||"en-US";rec.interimResults=true;rec.continuous=false;
  rec.onstart=()=>{state.listening=true;$("#micStatus").textContent="Listening with your browser speech language ("+rec.lang+").";$("#micBtn").textContent="Stop listening";};
  rec.onresult=e=>{let words="";for(let i=e.resultIndex;i<e.results.length;i++)words+=e.results[i][0].transcript;$("#typedInput").value=($("#typedInput").value+" "+words).trim();};
- rec.onerror=e=>toast("Microphone issue: "+e.error+". You can type instead.");
+ rec.onerror=e=>{const message=e.error==="not-allowed"?"Microphone permission was denied. You can type instead.":"Microphone issue: "+e.error+". You can type instead.";toast(message);};
  rec.onend=()=>{state.listening=false;$("#micBtn").textContent="Use microphone";$("#micStatus").textContent="Voice recognition follows your browser language. Typing supports any language.";};rec.start();
 }
 function toast(message){const el=$("#toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),3200);}
