@@ -31,6 +31,10 @@ For Cloudflare Pages, add `GEMINI_API_KEY` as an environment variable. For local
 
 Run `npm run check` to syntax-check the browser scripts and Cloudflare Pages Function with Node.js 22 or newer. A GitHub Actions workflow runs this check on pushes and pull requests.
 
+## Quality checks
+
+Run `npm run check` to syntax-check the browser scripts and Cloudflare Pages Function with Node.js 22 or newer. A GitHub Actions workflow runs this check on pushes and pull requests.
+
 ## Run locally
 
 This project uses Cloudflare Pages Functions for the AI endpoint. Install Wrangler, set a local secret with `wrangler pages secret put GEMINI_API_KEY`, then run `npx wrangler pages dev .`. Without the server secret, enter a Gemini key in Settings for a local test session.
